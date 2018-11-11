@@ -5,7 +5,7 @@ import (
 	"image/jpeg"
 	"os"
 
-	"github.com/alidadar7676/ComputerVision/edgeDetection"
+	"github.com/alidadar7676/ComputerVision/edge_detection"
 	"github.com/alidadar7676/ComputerVision/utils"
 )
 
@@ -25,7 +25,7 @@ func main() {
 
 	grayImage := utils.GrayScale(image)
 
-	sobelImage, err := edgeDetection.CannyGray(grayImage, 10)
+	sobelImage, err := edge_detection.CannyGray(grayImage, 10)
 	if err != nil {
 		fmt.Println(err)
 	}
