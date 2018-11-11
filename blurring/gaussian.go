@@ -1,4 +1,4 @@
-package gaussianBlur
+package blurring
 
 import (
 	"errors"

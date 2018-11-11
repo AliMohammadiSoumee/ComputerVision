@@ -6,12 +6,12 @@ import (
 	"image/color"
 	"math"
 
-	"github.com/alidadar7676/ComputerVision/gaussianBlur"
+	"github.com/alidadar7676/ComputerVision/blurring"
 	"github.com/alidadar7676/ComputerVision/utils"
 )
 
 func CannyGray(img *image.Gray, kernelSize uint) (*image.Gray, error) {
-	blurred, err := gaussianBlur.GaussianBlurGray(img, float64(kernelSize), 1)
+	blurred, err := blurring.GaussianBlurGray(img, float64(kernelSize), 1)
 	if err != nil {
 		return nil, err
 	}
