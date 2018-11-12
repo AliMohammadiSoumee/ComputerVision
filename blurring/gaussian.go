@@ -2,7 +2,6 @@ package blurring
 
 import (
 	"errors"
-	"fmt"
 	"image"
 	"math"
 
@@ -24,11 +23,10 @@ func generateGaussianKernel(radius float64, sigma float64) *convolution.Kernel {
 			kernel.Set(x, y, gaussianFunc(float64(x)-radius, float64(y)-radius, sigma))
 		}
 	}
-	fmt.Println(kernel)
 	return kernel
 }
 
 func gaussianFunc(x, y, sigma float64) float64 {
 	sigSqr := sigma * sigma
-	return (1.0 / (2 * math.Pi * sigSqr)) * math.Exp(-(x*x+y*y)/(2*sigSqr))
+	return (1.0 / (2 * math.Pi * sigSqr)) * math.Exp(-(x*x + y*y)/(2*sigSqr))
 }

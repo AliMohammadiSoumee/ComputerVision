@@ -1,4 +1,4 @@
-package edge_detection
+package edgeDetection
 
 import (
 	"errors"

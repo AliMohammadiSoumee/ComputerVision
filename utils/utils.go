@@ -46,3 +46,37 @@ func GrayScale(img image.Image) *image.Gray {
 	})
 	return gray
 }
+
+func SubtractGrayImages(firstImg, secondImg image.Image) *image.Gray {
+	if firstImg.Bounds() != secondImg.Bounds() {
+		return image.NewGray(image.Rectangle{})
+	}
+	resImg := image.NewGray(firstImg.Bounds())
+
+	ForEachPixel(firstImg.Bounds().Size(), func (x, y int) {
+		resImg.Set(x, y, SubtractGrayColor(firstImg.At(x, y), secondImg.At(x, y)))
+	})
+
+	return resImg
+}
+
+func SubtractGrayColor(firstCol, secondCol color.Color) color.Color {
+	_, firstGray, _, _ := firstCol.RGBA()
+	_, secondGray, _, _ := secondCol.RGBA()
+
+	sub := firstGray - secondGray
+	return color.Gray{Y: uint8(sub)}
+}
+
+func Create3DDirection() (dirx, diry, dirz []int) {
+	for x := -1; x <= 1; x++ {
+		for y := -1; y <= 1; y++ {
+			for z := -1; z <= 1; z++ {
+				dirx = append(dirx, x)
+				diry = append(diry, y)
+				dirz = append(dirz, z)
+			}
+		}
+	}
+	return
+}

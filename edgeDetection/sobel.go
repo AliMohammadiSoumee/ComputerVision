@@ -1,4 +1,4 @@
-package edge_detection
+package edgeDetection
 
 import (
 	"image"
@@ -28,19 +28,19 @@ func VerticalSobelGray(gray *image.Gray) (*image.Gray, error) {
 }
 
 func SobelGray(img *image.Gray) (*image.Gray, error) {
-	horizontal, error := HorizontalSobelGray(img)
-	if error != nil {
-		return nil, error
+	horizontal, err := HorizontalSobelGray(img)
+	if err != nil {
+		return nil, err
 	}
 
-	vertical, error := VerticalSobelGray(img)
-	if error != nil {
-		return nil, error
+	vertical, err := VerticalSobelGray(img)
+	if err != nil {
+		return nil, err
 	}
 
-	res, error := utils.AddGrayWeighted(horizontal, 0.5, vertical, 0.5)
-	if error != nil {
-		return nil, error
+	res, err := utils.AddGrayWeighted(horizontal, 0.5, vertical, 0.5)
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }

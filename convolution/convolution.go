@@ -1,7 +1,6 @@
 package convolution
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 
@@ -14,9 +13,9 @@ func ConvolveGray(img *image.Gray, kernel *Kernel) (*image.Gray, error) {
 	resultImage := image.NewGray(img.Bounds())
 	kernelSize := kernel.Size()
 
-	padded, error := padding.Padding(img, kernelSize)
-	if error != nil {
-		return nil, error
+	padded, err := padding.Padding(img, kernelSize)
+	if err != nil {
+		return nil, err
 	}
 
 	utils.ForEachPixel(originalSize, func(x int, y int) {
@@ -28,10 +27,8 @@ func ConvolveGray(img *image.Gray, kernel *Kernel) (*image.Gray, error) {
 				sum += float64(pixel.Y) * kE
 			}
 		}
-		//fmt.Println(x, y, sum)
 		sum = utils.Clamp(sum, utils.MinUint8, float64(utils.MaxUint8))
 		resultImage.Set(x, y, color.Gray{uint8(sum)})
 	})
-	fmt.Println(resultImage.Bounds().Size())
 	return resultImage, nil
 }

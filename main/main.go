@@ -5,7 +5,7 @@ import (
 	"image/jpeg"
 	"os"
 
-	"github.com/alidadar7676/ComputerVision/edge_detection"
+	"github.com/alidadar7676/ComputerVision/sift"
 	"github.com/alidadar7676/ComputerVision/utils"
 )
 
@@ -25,11 +25,11 @@ func main() {
 
 	grayImage := utils.GrayScale(image)
 
-	sobelImage, err := edge_detection.CannyGray(grayImage, 10)
-	if err != nil {
-		fmt.Println(err)
-	}
+	s := sift.Sift{}
+	sx, sy := s.SiftFeatures(grayImage, 4, 4)
+	fmt.Println(sx, sy)
 
+	/*
 	outfile, err := os.Create(os.Args[2])
 	if err != nil {
 		panic("Can not find output file")
@@ -37,4 +37,5 @@ func main() {
 	defer outfile.Close()
 
 	jpeg.Encode(outfile, sobelImage, nil)
+	*/
 }
