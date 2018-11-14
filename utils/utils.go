@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"github.com/coraldane/resize"
 )
 
 func ForEachPixel(size image.Point, f func(x int, y int)) {
@@ -79,4 +80,11 @@ func Create3DDirection() (dirx, diry, dirz []int) {
 		}
 	}
 	return
+}
+
+func HalveImage(srcImg *image.Gray) *image.Gray {
+	bounds := srcImg.Bounds()
+	scaledImg := resize.Resize(bounds.Dx()/2, bounds.Dy()/2, srcImg, resize.Bilinear)
+	resImg := GrayScale(scaledImg)
+	return resImg
 }

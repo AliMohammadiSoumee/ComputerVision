@@ -4,85 +4,79 @@ import (
 	"image"
 	"math"
 	"github.com/alidadar7676/ComputerVision/utils"
-	"github.com/coraldane/resize"
 	"github.com/alidadar7676/ComputerVision/blurring"
 	"fmt"
+	"github.com/alidadar7676/ComputerVision/gradient"
 )
 
-type Sift struct {
-	img        image.Gray
-	scaleSpace [][]image.Gray
-	octave     int
-	scaleLvl   int
-	dog        [][]image.Gray
+type KeyPoint struct {
+	octave int
+	scale  int
+	x      int
+	y      int
 }
 
-func (s *Sift) SiftFeatures(img *image.Gray, oct int, scale int) ([]int, []int) {
-	s.img = *img
-	s.octave = oct
-	s.scaleLvl = scale
+func SiftFeatures(img *image.Gray, oct int, scale int, tresh float64) []KeyPoint {
+	scaleSpace := createScaleSpace(img, oct, scale)
+	dog := createDoG(oct, scale, scaleSpace)
+	candidate := extractKeyPoints(oct, scale, dog)
+	gradSpec := createGradientSpec(oct, scale, dog)
+	fmt.Println("Len of Candidate keyPoints: ", len(candidate))
+	result := filterKeyPoints(candidate, gradSpec, tresh)
 
-	s.createScaleSpace()
-	s.createDoG()
-	return s.extractKeyPoints()
+	return result
 }
 
-func (s *Sift) createScaleSpace() {
-	k := math.Pow(2.0, 1.0/float64(s.scaleLvl))
-	sig := make([]float64, s.scaleLvl)
+func createScaleSpace(img *image.Gray, octave, scale int) [][]*image.Gray {
+	k := math.Pow(2.0, 1.0/float64(scale))
+	sig := make([]float64, scale)
 
 	sig[0] = 1
-	for i := 1; i < s.scaleLvl; i++ {
+	for i := 1; i < scale; i++ {
 		sig[i] = sig[i-1] * k
 	}
 
-	s.scaleSpace = make([][]image.Gray, s.octave)
-	for row := 0; row < s.octave; row++ {
-		s.scaleSpace[row] = make([]image.Gray, s.scaleLvl)
+	scaleSpace := make([][]*image.Gray, octave)
+	for row := 0; row < octave; row++ {
+		scaleSpace[row] = make([]*image.Gray, scale)
 
-		for col := 0; col < s.scaleLvl; col++ {
+		for col := 0; col < scale; col++ {
 			if row == 0 && col == 0 {
-				s.scaleSpace[row][col] = s.img
+				scaleSpace[row][col] = img
 			} else if col == 0 {
-				s.scaleSpace[row][col] = halveImage(&s.scaleSpace[row-1][col])
+				scaleSpace[row][col] = utils.HalveImage(scaleSpace[row-1][col])
 			} else {
-				tmp, err := blurring.GaussianBlurGray(&s.scaleSpace[row][col-1], 5, sig[col])
+				tmp, err := blurring.GaussianBlurGray(scaleSpace[row][col-1], 5, sig[col])
 				if err != nil {
 					panic("Can not blur the image")
 				}
-				s.scaleSpace[row][col] = *tmp
+				scaleSpace[row][col] = tmp
 			}
 		}
 	}
+	return scaleSpace
 }
 
-func halveImage(srcImg image.Image) image.Gray {
-	bounds := srcImg.Bounds()
-	scaledImg := resize.Resize(bounds.Dx()/2, bounds.Dy()/2, srcImg, resize.Bilinear)
-	resImg := utils.GrayScale(scaledImg)
-	return *resImg
-}
+func createDoG(octave, scale int, scaleSpace [][]*image.Gray) [][]*image.Gray {
+	dog := make([][]*image.Gray, octave)
+	for row := 0; row < octave; row++ {
+		dog[row] = make([]*image.Gray, scale-1)
 
-func (s *Sift) createDoG() {
-	s.dog = make([][]image.Gray, s.octave)
-	for row := 0; row < s.octave; row++ {
-		s.dog[row] = make([]image.Gray, s.scaleLvl-1)
-
-		for col := 0; col < s.scaleLvl-1; col++ {
-			s.dog[row][col] = *utils.SubtractGrayImages(&s.scaleSpace[row][col], &s.scaleSpace[row][col+1])
+		for col := 0; col < scale-1; col++ {
+			dog[row][col] = utils.SubtractGrayImages(scaleSpace[row][col], scaleSpace[row][col+1])
 		}
 	}
+
+	return dog
 }
 
-func (s *Sift) extractKeyPoints() ([]int, []int) {
-	keysX := []int{}
-	keysY := []int{}
+func extractKeyPoints(octave, scale int, dog [][]*image.Gray) []KeyPoint {
 	dirx, diry, dirz := utils.Create3DDirection()
 
 	localMinimum := func(row, col, x, y int) bool {
-		pix := s.dog[row][col].GrayAt(x, y).Y
+		pix := dog[row][col].GrayAt(x, y).Y
 		for d := 0; d < 27; d++ {
-			if s.dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y < pix {
+			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y < pix {
 				return false
 			}
 		}
@@ -90,34 +84,100 @@ func (s *Sift) extractKeyPoints() ([]int, []int) {
 	}
 
 	localMaximum := func(row, col, x, y int) bool {
-		pix := s.dog[row][col].GrayAt(x, y).Y
+		pix := dog[row][col].GrayAt(x, y).Y
 		for d := 0; d < 27; d++ {
-			if s.dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y > pix {
+			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y > pix {
 				return false
 			}
 		}
 		return true
 	}
 
-	for row := 0; row < s.octave; row++ {
-		for col := 1; col < s.scaleLvl-2; col++ {
-			counter := 0
+	candidateKeys := make([]KeyPoint, 0)
 
-			bound := s.dog[row][col].Bounds().Size()
+	for row := 0; row < octave; row++ {
+		for col := 1; col < scale-2; col++ {
+			bound := dog[row][col].Bounds().Size()
+
 			utils.ForEachPixel(bound, func(x, y int) {
-				if x == 0 || y == 0 || x+1 >= s.dog[row][col].Bounds().Size().X || y+1 >= s.dog[row][col].Bounds().Size().Y {
+				if x == 0 || y == 0 || x+1 >= dog[row][col].Bounds().Size().X || y+1 >= dog[row][col].Bounds().Size().Y {
 					return
 				}
 				if localMinimum(row, col, x, y) || localMaximum(row, col, x, y) {
-					keysX = append(keysX, x)
-					keysY = append(keysY, y)
-				} else {
-					counter++
+					candidateKeys = append(candidateKeys, KeyPoint{
+						x:      x,
+						y:      y,
+						octave: row,
+						scale:  col,
+					})
 				}
 			})
-			fmt.Println(len(keysX), counter, "---------> ", s.dog[row][col].Bounds().Size().X * s.dog[row][col].Bounds().Size().Y)
+		}
+	}
+	return candidateKeys
+}
+
+type gradianSpec struct {
+	g     [][]float64
+	theta [][]float64
+}
+
+func (grad *gradianSpec) normalize() {
+	max := 0.0
+	for _, row := range grad.g {
+		for _, val := range row {
+			max = math.Max(max, val)
 		}
 	}
 
-	return keysX, keysY
+	for row := range grad.g {
+		for col := range grad.g[row] {
+			grad.g[row][col] /= max
+		}
+	}
+}
+
+func createGradientSpec(octave, scale int, dog [][]*image.Gray) [][]gradianSpec {
+	gX := make([][]*image.Gray, octave)
+	gY := make([][]*image.Gray, octave)
+	gradSpec := make([][]gradianSpec, octave)
+
+	for i := 0; i < octave; i++ {
+		gX[i] = make([]*image.Gray, scale)
+		gY[i] = make([]*image.Gray, scale)
+		gradSpec[i] = make([]gradianSpec, scale)
+	}
+
+	var err error
+	for row := 0; row < octave; row++ {
+		for col := 1; col < scale-2; col++ {
+
+			if gX[row][col], err = gradient.HorizontalSobelGray(dog[row][col]); err != nil {
+				panic("Cannot create gX")
+			}
+			if gY[row][col], err = gradient.VerticalSobelGray(dog[row][col]); err != nil {
+				panic("Cannot create gX")
+			}
+			if g, th, err := gradient.GradientAndOrientation(gX[row][col], gY[row][col]); err != nil {
+				panic("Cannot create g and theta")
+			} else {
+				gradSpec[row][col].g = g
+				gradSpec[row][col].theta = th
+				gradSpec[row][col].normalize()
+			}
+		}
+	}
+
+	return gradSpec
+}
+
+func filterKeyPoints(candidate []KeyPoint, gradSpec [][]gradianSpec, tresh float64) []KeyPoint {
+	result := make([]KeyPoint, 0)
+
+	for _, can := range candidate {
+		if gradSpec[can.octave][can.scale].g[can.x][can.y] > tresh {
+			result = append(result, can)
+		}
+	}
+	return result
 }
