@@ -27,14 +27,12 @@ func main() {
 	grayImage := utils.GrayScale(image)
 
 	s := sift.SiftFeatures(grayImage, 4, 4, 0.9)
-	/*
-		for _, val := range s {
-			fmt.Println(val.Feature)
-		}
-	*/
+	for _, val := range s {
+		fmt.Println(val.Feature)
+	}
 	fmt.Println(len(s))
 
-	_, err = edgeDetection.SobelGray(grayImage)
+	//sobelImage, err := edgeDetection.SobelGray(grayImage)
 	sobelImage, err := edgeDetection.CannyGray(grayImage, 4)
 
 	outfile, err := os.Create(os.Args[2])
