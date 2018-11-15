@@ -27,10 +27,7 @@ func main() {
 	grayImage := utils.GrayScale(image)
 
 	s := sift.SiftFeatures(grayImage, 4, 4, 0.9)
-	for _, val := range s {
-		fmt.Println(val.Feature)
-	}
-	fmt.Println(len(s))
+	fmt.Println("Len of keyPoints:", len(s))
 
 	//sobelImage, err := edgeDetection.SobelGray(grayImage)
 	sobelImage, err := edgeDetection.CannyGray(grayImage, 4)
