@@ -6,13 +6,18 @@ import (
 	"math"
 
 	"github.com/alidadar7676/ComputerVision/convolution"
+	"github.com/alidadar7676/ComputerVision/utils"
 )
 
 func GaussianBlurGray(img *image.Gray, radius float64, sigma float64) (*image.Gray, error) {
 	if radius <= 0 {
 		return nil, errors.New("radius must be bigger then 0")
 	}
-	return convolution.ConvolveGray(img, generateGaussianKernel(radius, sigma).Normalize())
+	if mat, err := convolution.ConvolveGray(img, generateGaussianKernel(radius, sigma).Normalize()); err != nil {
+		return nil, err
+	} else {
+		return utils.CreateGrayImage(mat, img.Rect), nil
+	}
 }
 
 func generateGaussianKernel(radius float64, sigma float64) *convolution.Kernel {
@@ -28,5 +33,5 @@ func generateGaussianKernel(radius float64, sigma float64) *convolution.Kernel {
 
 func gaussianFunc(x, y, sigma float64) float64 {
 	sigSqr := sigma * sigma
-	return (1.0 / (2 * math.Pi * sigSqr)) * math.Exp(-(x*x + y*y)/(2*sigSqr))
+	return (1.0 / (2 * math.Pi * sigSqr)) * math.Exp(-(x*x+y*y)/(2*sigSqr))
 }

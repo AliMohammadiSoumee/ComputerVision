@@ -2,16 +2,19 @@ package convolution
 
 import (
 	"image"
-	"image/color"
 
 	"github.com/alidadar7676/ComputerVision/padding"
 	"github.com/alidadar7676/ComputerVision/utils"
 )
 
-func ConvolveGray(img *image.Gray, kernel *Kernel) (*image.Gray, error) {
+func ConvolveGray(img *image.Gray, kernel *Kernel) ([][]float64, error) {
 	originalSize := img.Bounds().Size()
-	resultImage := image.NewGray(img.Bounds())
 	kernelSize := kernel.Size()
+
+	result := make([][]float64, originalSize.X)
+	for i := 0; i < originalSize.X; i++ {
+		result[i] = make([]float64, originalSize.Y)
+	}
 
 	padded, err := padding.Padding(img, kernelSize)
 	if err != nil {
@@ -27,8 +30,7 @@ func ConvolveGray(img *image.Gray, kernel *Kernel) (*image.Gray, error) {
 				sum += float64(pixel.Y) * kE
 			}
 		}
-		sum = utils.Clamp(sum, utils.MinUint8, float64(utils.MaxUint8))
-		resultImage.Set(x, y, color.Gray{uint8(sum)})
+		result[x][y] = sum
 	})
-	return resultImage, nil
+	return result, nil
 }

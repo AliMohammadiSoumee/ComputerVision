@@ -4,6 +4,8 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"math"
+
 	"github.com/coraldane/resize"
 )
 
@@ -54,7 +56,7 @@ func SubtractGrayImages(firstImg, secondImg image.Image) *image.Gray {
 	}
 	resImg := image.NewGray(firstImg.Bounds())
 
-	ForEachPixel(firstImg.Bounds().Size(), func (x, y int) {
+	ForEachPixel(firstImg.Bounds().Size(), func(x, y int) {
 		resImg.Set(x, y, SubtractGrayColor(firstImg.At(x, y), secondImg.At(x, y)))
 	})
 
@@ -87,4 +89,38 @@ func HalveImage(srcImg *image.Gray) *image.Gray {
 	scaledImg := resize.Resize(bounds.Dx()/2, bounds.Dy()/2, srcImg, resize.Bilinear)
 	resImg := GrayScale(scaledImg)
 	return resImg
+}
+
+func DiscreteOrientation(x float64) (float64, error) {
+	angle := 180 * x / math.Pi
+	if IsBetween(angle, 0, 22.5) || IsBetween(angle, -180, -157.5) {
+		return 0, nil
+	}
+	if IsBetween(angle, 157.5, 180) || IsBetween(angle, -22.5, 0) {
+		return 0, nil
+	}
+	if IsBetween(angle, 22.5, 67.5) || IsBetween(angle, -157.5, -112.5) {
+		return 45, nil
+	}
+	if IsBetween(angle, 67.5, 112.5) || IsBetween(angle, -112.5, -67.5) {
+		return 90, nil
+	}
+	if IsBetween(angle, 112.5, 157.5) || IsBetween(angle, -67.5, -22.5) {
+		return 135, nil
+	}
+	return 0, errors.New("Invalid angle")
+}
+
+func IsBetween(val float64, lowerBound float64, upperBound float64) bool {
+	return val >= lowerBound && val < upperBound
+}
+
+func CreateGrayImage(mat [][]float64, rect image.Rectangle) *image.Gray {
+	image := image.NewGray(rect)
+	ForEachPixel(rect.Size(), func(x, y int) {
+		pix := Clamp(mat[x][y], MinUint8, float64(MaxUint8))
+		image.Set(x, y, color.Gray{uint8(pix)})
+
+	})
+	return image
 }

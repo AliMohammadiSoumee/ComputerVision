@@ -3,17 +3,19 @@ package sift
 import (
 	"image"
 	"math"
-	"github.com/alidadar7676/ComputerVision/utils"
+
 	"github.com/alidadar7676/ComputerVision/blurring"
-	"fmt"
 	"github.com/alidadar7676/ComputerVision/gradient"
+	"github.com/alidadar7676/ComputerVision/utils"
 )
 
 type KeyPoint struct {
-	octave int
-	scale  int
-	x      int
-	y      int
+	orientation float64
+	octave      int
+	scale       int
+	x           int
+	y           int
+	Feature     []float64
 }
 
 func SiftFeatures(img *image.Gray, oct int, scale int, tresh float64) []KeyPoint {
@@ -21,8 +23,9 @@ func SiftFeatures(img *image.Gray, oct int, scale int, tresh float64) []KeyPoint
 	dog := createDoG(oct, scale, scaleSpace)
 	candidate := extractKeyPoints(oct, scale, dog)
 	gradSpec := createGradientSpec(oct, scale, dog)
-	fmt.Println("Len of Candidate keyPoints: ", len(candidate))
-	result := filterKeyPoints(candidate, gradSpec, tresh)
+	result := filterKeyPoints(candidate, gradSpec, dog, tresh)
+	fetchMaxOrientation(result, gradSpec)
+	createFeatures(result, gradSpec)
 
 	return result
 }
@@ -76,7 +79,10 @@ func extractKeyPoints(octave, scale int, dog [][]*image.Gray) []KeyPoint {
 	localMinimum := func(row, col, x, y int) bool {
 		pix := dog[row][col].GrayAt(x, y).Y
 		for d := 0; d < 27; d++ {
-			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y < pix {
+			if dirx[d] == 0 && diry[d] == 0 && dirz[d] == 0 {
+				continue
+			}
+			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y <= pix {
 				return false
 			}
 		}
@@ -86,7 +92,10 @@ func extractKeyPoints(octave, scale int, dog [][]*image.Gray) []KeyPoint {
 	localMaximum := func(row, col, x, y int) bool {
 		pix := dog[row][col].GrayAt(x, y).Y
 		for d := 0; d < 27; d++ {
-			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y > pix {
+			if dirx[d] == 0 && diry[d] == 0 && dirz[d] == 0 {
+				continue
+			}
+			if dog[row][col+dirz[d]].GrayAt(x+dirx[d], y+diry[d]).Y >= pix {
 				return false
 			}
 		}
@@ -117,12 +126,14 @@ func extractKeyPoints(octave, scale int, dog [][]*image.Gray) []KeyPoint {
 	return candidateKeys
 }
 
-type gradianSpec struct {
+type gradientSpec struct {
 	g     [][]float64
 	theta [][]float64
+	gX    [][]float64
+	gY    [][]float64
 }
 
-func (grad *gradianSpec) normalize() {
+func (grad *gradientSpec) normalize() {
 	max := 0.0
 	for _, row := range grad.g {
 		for _, val := range row {
@@ -137,33 +148,24 @@ func (grad *gradianSpec) normalize() {
 	}
 }
 
-func createGradientSpec(octave, scale int, dog [][]*image.Gray) [][]gradianSpec {
-	gX := make([][]*image.Gray, octave)
-	gY := make([][]*image.Gray, octave)
-	gradSpec := make([][]gradianSpec, octave)
+func createGradientSpec(octave, scale int, dog [][]*image.Gray) [][]gradientSpec {
+	gradSpec := make([][]gradientSpec, octave)
 
 	for i := 0; i < octave; i++ {
-		gX[i] = make([]*image.Gray, scale)
-		gY[i] = make([]*image.Gray, scale)
-		gradSpec[i] = make([]gradianSpec, scale)
+		gradSpec[i] = make([]gradientSpec, scale)
 	}
 
-	var err error
 	for row := 0; row < octave; row++ {
 		for col := 1; col < scale-2; col++ {
+			gs := &gradSpec[row][col]
 
-			if gX[row][col], err = gradient.HorizontalSobelGray(dog[row][col]); err != nil {
+			if gX, err := gradient.Horizontal(dog[row][col]); err != nil {
 				panic("Cannot create gX")
-			}
-			if gY[row][col], err = gradient.VerticalSobelGray(dog[row][col]); err != nil {
+			} else if gY, err := gradient.Vertical(dog[row][col]); err != nil {
 				panic("Cannot create gX")
-			}
-			if g, th, err := gradient.GradientAndOrientation(gX[row][col], gY[row][col]); err != nil {
-				panic("Cannot create g and theta")
 			} else {
-				gradSpec[row][col].g = g
-				gradSpec[row][col].theta = th
-				gradSpec[row][col].normalize()
+				gs.g, gs.theta = gradient.GradientAndOrientation(dog[row][col].Bounds().Size(), gX, gY)
+				gs.normalize()
 			}
 		}
 	}
@@ -171,13 +173,86 @@ func createGradientSpec(octave, scale int, dog [][]*image.Gray) [][]gradianSpec 
 	return gradSpec
 }
 
-func filterKeyPoints(candidate []KeyPoint, gradSpec [][]gradianSpec, tresh float64) []KeyPoint {
+func filterKeyPoints(candidate []KeyPoint, gradSpec [][]gradientSpec, dog [][]*image.Gray, tresh float64) []KeyPoint {
 	result := make([]KeyPoint, 0)
 
 	for _, can := range candidate {
+		bound := dog[can.octave][can.scale].Bounds()
+
+		if can.x < 8 || can.x > bound.Size().X-10 || can.y < 8 || can.y > bound.Size().Y-10 {
+			continue
+		}
+
 		if gradSpec[can.octave][can.scale].g[can.x][can.y] > tresh {
 			result = append(result, can)
 		}
 	}
 	return result
+}
+
+func fetchMaxOrientation(keys []KeyPoint, gradSpec [][]gradientSpec) {
+	for ind, key := range keys {
+		keys[ind].orientation = getBiggestOrientation(gradSpec[key.octave][key.scale].theta, key.x, key.y)
+	}
+}
+
+func getBiggestOrientation(theta [][]float64, x, y int) float64 {
+	max := -1000.0
+	for row := -8; row < 8; row++ {
+		for col := -8; col < 8; col++ {
+			max = math.Max(max, theta[x+row][y+col])
+		}
+	}
+	return max
+}
+
+func createFeatures(keys []KeyPoint, gradSpec [][]gradientSpec) {
+	for ind, key := range keys {
+		gs := &gradSpec[key.octave][key.scale]
+
+		for row := -8; row < 8; row += 4 {
+			for col := -8; col < 8; col += 4 {
+				vector8 := createSub4x4Features(gs, key.x+row, key.y+col, key.orientation)
+				keys[ind].Feature = append(keys[ind].Feature, vector8...)
+			}
+		}
+	}
+}
+
+func createSub4x4Features(gs *gradientSpec, x, y int, orien float64) []float64 {
+	vector := make([]float64, 8)
+	for row := 0; row < 4; row++ {
+		for col := 0; col < 4; col++ {
+			index := convertAngle(gs.theta[x+row][y+col] - orien)
+			vector[index] += gs.g[x][y]
+		}
+	}
+	return vector
+}
+
+func convertAngle(ang float64) int {
+	angle := 180.0 * ang / math.Pi
+	if angle < 0 {
+		angle += 360
+	}
+
+	switch {
+	case utils.IsBetween(angle, 0, 45):
+		return 0
+	case utils.IsBetween(angle, 45, 90):
+		return 1
+	case utils.IsBetween(angle, 90, 135):
+		return 2
+	case utils.IsBetween(angle, 135, 180):
+		return 3
+	case utils.IsBetween(angle, 180, 225):
+		return 4
+	case utils.IsBetween(angle, 225, 270):
+		return 5
+	case utils.IsBetween(angle, 270, 315):
+		return 6
+	case utils.IsBetween(angle, 315, 360):
+		return 7
+	}
+	return 4
 }

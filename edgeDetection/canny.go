@@ -3,9 +3,10 @@ package edgeDetection
 import (
 	"image"
 	"image/color"
+
 	"github.com/alidadar7676/ComputerVision/blurring"
-	"github.com/alidadar7676/ComputerVision/utils"
 	"github.com/alidadar7676/ComputerVision/gradient"
+	"github.com/alidadar7676/ComputerVision/utils"
 )
 
 func CannyGray(img *image.Gray, kernelSize uint) (*image.Gray, error) {
@@ -14,24 +15,22 @@ func CannyGray(img *image.Gray, kernelSize uint) (*image.Gray, error) {
 		return nil, err
 	}
 
-	vertical, err := gradient.VerticalSobelGray(blurred)
+	vertical, err := gradient.Vertical(blurred)
 	if err != nil {
 		return nil, err
 	}
-	horizontal, err := gradient.HorizontalSobelGray(blurred)
-	if err != nil {
-		return nil, err
-	}
-
-	g, theta, err := gradient.GradientAndOrientation(vertical, horizontal)
+	horizontal, err := gradient.Horizontal(blurred)
 	if err != nil {
 		return nil, err
 	}
 
-	image := image.NewGray(blurred.Rect)
+	g, t := gradient.GradientAndOrientation(img.Bounds().Size(), vertical, horizontal)
+	theta := discreteOrientations(img.Bounds().Size(), t)
+
+	blurredImage := image.NewGray(blurred.Rect)
 	for i := 0; i < blurred.Bounds().Size().X; i++ {
 		for j := 0; j < blurred.Bounds().Size().Y; j++ {
-			image.SetGray(i, j, color.Gray{Y: uint8(g[i][j])})
+			blurredImage.SetGray(i, j, color.Gray{Y: uint8(utils.Clamp(g[i][j], utils.MinUint8, float64(utils.MaxUint8)))})
 		}
 	}
 
@@ -78,13 +77,6 @@ func nonMaxSuppression(img *image.Gray, g [][]float64, theta [][]float64) *image
 	return thinEdges
 }
 
-func checkNeighbours(x, y int, img *image.Gray) bool {
-	return img.GrayAt(x-1, y-1).Y == utils.MaxUint8 || img.GrayAt(x-1, y).Y == utils.MaxUint8 ||
-		img.GrayAt(x-1, y+1).Y == utils.MaxUint8 || img.GrayAt(x, y-1).Y == utils.MaxUint8 ||
-		img.GrayAt(x, y+1).Y == utils.MaxUint8 || img.GrayAt(x+1, y-1).Y == utils.MaxUint8 ||
-		img.GrayAt(x+1, y).Y == utils.MaxUint8 || img.GrayAt(x+1, y+1).Y == utils.MaxUint8
-}
-
 func doubleThreshold(img *image.Gray, g [][]float64, upperBound float64) *image.Gray {
 	size := img.Bounds().Size()
 	res := image.NewGray(img.Rect)
@@ -99,4 +91,16 @@ func doubleThreshold(img *image.Gray, g [][]float64, upperBound float64) *image.
 		}
 	})
 	return res
+}
+
+func discreteOrientations(size image.Point, t [][]float64) [][]float64 {
+	theta := make([][]float64, size.X)
+	for i := 0; i < size.X; i++ {
+		theta[i] = make([]float64, size.Y)
+	}
+	utils.ForEachPixel(size, func(x, y int) {
+		theta[x][y], _ = utils.DiscreteOrientation(t[x][y])
+	})
+
+	return theta
 }
